@@ -4,9 +4,12 @@
  *
  * @package Comment2Hook
  * @author medmin
- * @version 1.0.0
+ * @version 1.1.0
  * @link https://github.com/SuperPHP/Typecho_Comment2Hook_Plugin
  */
+
+require('libs/ServerChan.php');
+
 class Comment2Hook_Plugin implements Typecho_Plugin_Interface
 {
     /**
@@ -39,11 +42,19 @@ class Comment2Hook_Plugin implements Typecho_Plugin_Interface
      * @return void
      */
     public static function config(Typecho_Widget_Helper_Form $form) {
-        $url = new Typecho_Widget_Helper_Form_Element_Text('whUrl', NULL, NULL, _t('Webhooks URL'), _t("URL是必须的"));
-        $form->addInput($url->addRule('required', _t('您必须填写 Webhook URL')));
 
-        $key = new Typecho_Widget_Helper_Form_Element_Text('whKey', NULL, NULL, _t('Webhook Private Key'), _t('Webhooks密钥'));
-        $form->addInput($key->addRule('required', _t('您必须填写 Webhook Private Key')));
+        $service = new Typecho_Widget_Helper_Form_Element_Select('service', [
+            "server_chan" => "Server酱",
+            "ttanli_email" => "Email服务",
+            "ttanli_bot" => "Telegram Bot"
+        ], 'server_chan', _t('选择使用何种通知服务'), _t('暂时仅支持Server酱'));
+        $form->addInput($service->addRule('required', _t('您必须选择一项通知服务')));
+
+        $whUrl = new Typecho_Widget_Helper_Form_Element_Text('whUrl', NULL, NULL, _t('Webhooks URL'), _t("URL是必须的"));
+        $form->addInput($whUrl->addRule('required', _t('您必须填写 Webhook URL')));
+
+        $whKey = new Typecho_Widget_Helper_Form_Element_Text('whKey', NULL, NULL, _t('Webhook Private Key'), _t('Webhooks密钥'));
+        $form->addInput($whKey);
 
         $excludeBlogger = new Typecho_Widget_Helper_Form_Element_Radio('excludeBlogger',
             array(
@@ -73,6 +84,7 @@ class Comment2Hook_Plugin implements Typecho_Plugin_Interface
     public static function triggerHook($comment, $post) {
         $options = Typecho_Widget::widget('Widget_Options')->plugin('Comment2Hook');
 
+        $service = $options->service;
         $whUrl = $options->whUrl;
         $whKey = $options->whKey;
         $excludeBlogger = $options->excludeBlogger;
@@ -80,27 +92,32 @@ class Comment2Hook_Plugin implements Typecho_Plugin_Interface
         if ($comment['authorId'] == 1 && $excludeBlogger == '1') {
             return $comment;
         }
+        if ($service == 'server_chan'){
+            $text = "有人留言了：文章是《" . $post->title ."》！内容摘要：" . substr($comment['text'], 0, 20);
+            $desp = "作者：".$comment['author']."\n\n评论内容：" . $comment['text'];
+            $serverChan = new ServerChan($whUrl, $text, $desp);
+            $serverChan->trigger();
+        }else{
+            $headers = array();
+            $headers[] = "Content-type: application/json";
+            $headers[] = "Authorization: Bearer " . $whKey;
+            $url = $whUrl;
+            $data = array(
+                'title' => $post->title,
+                'author' => $comment['author'],
+                'content' => $comment['text']
+            );
 
-        $headers = array();
-        $headers[] = "Content-type: application/json";
-        $headers[] = "Authorization: Bearer " . $whKey;
-        
-        $url = $whUrl;
-        $data = array(
-            'title' => $post->title,
-            'author' => $comment['author'],
-            'content' => $comment['text']
-        );
-
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_exec($ch);
-        curl_close($ch);
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_exec($ch);
+            curl_close($ch);
+        }
 
         return $comment;
     }
