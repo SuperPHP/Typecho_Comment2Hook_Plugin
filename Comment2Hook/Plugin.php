@@ -53,14 +53,14 @@ class Comment2Hook_Plugin implements Typecho_Plugin_Interface
         $whUrl = new Typecho_Widget_Helper_Form_Element_Text('whUrl', NULL, NULL, _t('Webhooks URL'), _t("URL是必须的"));
         $form->addInput($whUrl->addRule('required', _t('您必须填写 Webhook URL')));
 
-        $whKey = new Typecho_Widget_Helper_Form_Element_Text('whKey', NULL, NULL, _t('Webhook Private Key'), _t('Webhooks密钥'));
+        $whKey = new Typecho_Widget_Helper_Form_Element_Text('whKey', NULL, NULL, _t('Webhook Private Key（根据所选服务选填）'), _t('Webhooks密钥'));
         $form->addInput($whKey);
 
         $excludeBlogger = new Typecho_Widget_Helper_Form_Element_Radio('excludeBlogger',
             array(
                 '1' => '是',
                 '0' => '否'
-            ),'1', _t('当评论者为博主本人时不推送'), _t('启用后，若评论者为博主，则不会推送至 Webhooks'));
+            ),'1', _t('当评论者为博主本人时不推送'), _t('如果选择“是”，博主本人写的评论则不会推送至 Webhooks'));
         $form->addInput($excludeBlogger);
     }
 
@@ -93,7 +93,7 @@ class Comment2Hook_Plugin implements Typecho_Plugin_Interface
             return $comment;
         }
         if ($service == 'server_chan'){
-            $text = "有人留言了：文章是《" . $post->title ."》！内容摘要：" . substr($comment['text'], 0, 20);
+            $text = "收到新留言：文章是《" . $post->title ."》！内容摘要：" . substr($comment['text'], 0, 20);
             $desp = "作者：".$comment['author']."\n\n评论内容：" . $comment['text'];
             $serverChan = new ServerChan($whUrl, $text, $desp);
             $serverChan->trigger();
