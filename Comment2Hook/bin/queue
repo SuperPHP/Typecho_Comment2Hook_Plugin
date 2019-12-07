@@ -1,0 +1,52 @@
+#!/usr/bin/env php
+<?php
+
+require __DIR__ . '/../libs/dotenv/Exception/ExceptionInterface.php';
+require __DIR__ . '/../libs/dotenv/Exception/FormatException.php';
+require __DIR__ . '/../libs/dotenv/Exception/FormatExceptionContext.php';
+require __DIR__ . '/../libs/dotenv/Exception/PathException.php';
+
+require __DIR__ . '/../libs/dotenv/Dotenv.php';
+
+use Symfony\Component\Dotenv\Dotenv;
+
+$dotenv = new Dotenv();
+$dotenv->load(__DIR__.'/../.env');
+
+$dsn = $_ENV["DB_TYPE"] . ":host=" . $_ENV["DB_HOST"] .";dbname=" .$_ENV["DB_NAME"];
+$dbConn = new PDO($dsn, $_ENV['DB_USER'], $_ENV['DB_PASS']);
+$dbConn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+$sql = "SELECT * FROM sdq_jobs WHERE is_done=false ORDER BY created_at ASC LIMIT 10";
+$stmt = $dbConn->prepare($sql);
+$stmt->execute();
+$rows = $stmt->fetchAll(PDO::FETCH_BOTH); // acutally, the default value is PDO::FETCH_BOTH
+
+if(count($rows) > 0){
+    hitServerChan();
+    foreach ($rows as $row){
+        $sql2 = "UPDATE sdq_jobs SET is_done=?, done_at=? WHERE id=?";
+        $stmt2 = $dbConn->prepare($sql2);
+        $stmt2->execute([TRUE, time(), $row['id']]);
+    }
+}
+
+/** same content will not sent again in 5 min */
+function hitServerChan(){
+    $url = "https://sc.ftqq.com/". $_ENV['SC_KEY'] .".send";
+    $postdata = http_build_query(
+            array(
+                'text' => "博客有新留言了",
+                'desp' => "本消息发自Queue"
+            )
+        );
+    $opts = array('http' =>
+        array(
+            'method'  => 'POST',
+            'header'  => 'Content-type: application/x-www-form-urlencoded',
+            'content' => $postdata
+        )
+    );
+    $context  = stream_context_create($opts);
+    file_get_contents($url, false, $context);
+}
